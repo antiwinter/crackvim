@@ -1,3 +1,11 @@
+# Fork note
+
+Rudely modified to achive multi-processor performance.
+
+```
+./crackvim -C 4 test.txt
+```
+
 crackvim
 ========
 
