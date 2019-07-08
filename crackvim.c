@@ -92,21 +92,30 @@ int is_u8(char *data, int len) {
     char *p = data;
 
     for (;i < len; i++, p++) {
+//        printf("check %02x\n", *p);
         if(c) {
-            if (*p >> 6 != 2)
+            if (((*p >> 6) & 3) != 2) {
+ //               printf("not u8 1\n");
                 return 0;
+            }
             c--;
         } else {
             if (*p & 0x80) {
                 char n = *p;
                 for(; n & 0x80; c++, n <<= 1);
-                if (c == 8) return 0;
+//                printf("got c %d\n", c);
+                if (c < 2 || c > 3) {
+ //                   printf("not u8 2, %d\n", c);
+                    return 0;
+                }
+                c--;
             }
         }
     }
+ //  printf("is u8\n");
     return 1;
 }
-
+pthread_mutex_t lock;
 int crack(uint8_t *ciphertext, long length, long long *counter, int inc, char *start_passwd, FILE *dict){
 	char *password = start_passwd;
 	char *newline;
@@ -150,10 +159,11 @@ int crack(uint8_t *ciphertext, long length, long long *counter, int inc, char *s
 			}
 		} else {
                     if(is_u8(plaintext, length < CHECK_LEN? length: CHECK_LEN)){
-				printf("uossible password: '%s'\n", password);
-				printf("ulaintext: %-32s\n", plaintext);
-                                exit(0);
-			}
+                        pthread_mutex_lock(&lock);
+                        printf("%s  %s\n", password, plaintext);
+                        fflush(stdout);
+                        pthread_mutex_unlock(&lock);
+                    }
 		}
 		if(dict){
 			if(fgets(password, sizeof(password), dict) == NULL){
@@ -211,7 +221,6 @@ void start_fibers(uint8_t *data, int len, int count)
 
         info[i].counter = 0;
         inc_password(info[i].start, i);
-
         pthread_create(&info[i].id, NULL, fiber, &info[i]);
 
         printf("thread created\n");
