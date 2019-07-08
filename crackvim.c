@@ -87,6 +87,26 @@ int inc_password(char *password, int inc){
     return 1;
 }
 
+int is_u8(char *data, int len) {
+    int i = 0, c = 0;
+    char *p = data;
+
+    for (;i < len; i++, p++) {
+        if(c) {
+            if (*p >> 6 != 2)
+                return 0;
+            c--;
+        } else {
+            if (*p & 0x80) {
+                char n = *p;
+                for(; n & 0x80; c++, n <<= 1);
+                if (c == 8) return 0;
+            }
+        }
+    }
+    return 1;
+}
+
 int crack(uint8_t *ciphertext, long length, long long *counter, int inc, char *start_passwd, FILE *dict){
 	char *password = start_passwd;
 	char *newline;
@@ -129,16 +149,9 @@ int crack(uint8_t *ciphertext, long length, long long *counter, int inc, char *s
 				printf("Plaintext: %-32s\n", plaintext);
 			}
 		} else {
-                        int len = CHECK_LEN;
-                        if(length < len) len = length;
-			for(i = 0; i < len; i++){
-				if(plaintext[i] < 0x9 || (0xd < plaintext[i] && plaintext[i] < 0x20) || plaintext[i] == 0xc || 0x7e < plaintext[i]){
-					break;
-				}
-			}
-			if(i == len){
-				printf("Possible password: '%s'\n", password);
-				printf("Plaintext: %-32s\n", plaintext);
+                    if(is_u8(plaintext, length < CHECK_LEN? length: CHECK_LEN)){
+				printf("uossible password: '%s'\n", password);
+				printf("ulaintext: %-32s\n", plaintext);
                                 exit(0);
 			}
 		}
@@ -213,8 +226,8 @@ void start_fibers(uint8_t *data, int len, int count)
         }
 
         for (p = u; hi > 1000 && *p != 'b'; hi /= 1000, p++);
-        fprintf(stdout, "\r%.1f%c tested :: %s        ", hi, *p, info[0].start);
-        fflush(stdout);
+        fprintf(stderr, "\r%.1f%c tested :: %s        ", hi, *p, info[0].start);
+        fflush(stderr);
         usleep(500000);
     }
 }
