@@ -7,9 +7,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
+#include <pthread.h>
 
 #include "pkzip_crypto.h"
 #include "crc32.h"
+
+#define CHECK_LEN 40
 
 void die(char *reason){
 	fflush(stdout);
@@ -59,110 +63,45 @@ void load_file(char *filename, uint8_t **filedata, long *filesize){
 }
 
 
-int inc_password(char *password, int max_len, int charset){
-	int carry;
+char *_set = "abcdefghijklmnopqrstuvwxyz_1234567890";
+int _len = 0;
+int _rs[256];
 
-	carry = 1;
+int inc_password(char *password, int inc){
+    char *p = password, c = 0, n;
 
-	while(carry && 0 <= max_len){
-		if(charset == 0){
-			if(*password < 'a'){
-				*password = 'a';
-				carry = 0;
-			} else if(*password < 'z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'z'){
-				*password = 'a';
-				carry = 1;
-			}
-		} else if(charset == 1){
-			if(*password < 'A'){
-				*password = 'A';
-				carry = 0;
-			} else if(*password < 'Z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'Z'){
-				*password = 'A';
-				carry = 1;
-			}
-		} else if(charset == 2){
-			if(*password < 'A'){
-				*password = 'A';
-				carry = 0;
-			} else if(*password < 'Z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'Z'){
-				*password = 'a';
-				carry = 0;
-			} else if(*password < 'z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'z'){
-				*password = 'A';
-				carry = 1;
-			}
-		} else if(charset == 3){
-			if(*password < '0'){
-				*password = '0';
-				carry = 0;
-			} else if(*password < '9'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == '9'){
-				*password = 'A';
-				carry = 0;
-			} else if(*password < 'Z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'Z'){
-				*password = 'a';
-				carry = 0;
-			} else if(*password < 'z'){
-				*password += 1;
-				carry = 0;
-			} else if(*password == 'z'){
-				*password = '0';
-				carry = 1;
-			}
-		} else if(charset == 4){
-			if(*password < 0x20){
-				*password = 0x20;
-				carry = 0;
-			} else if(*password < 0x7e){
-				*password += 1;
-				carry = 0;
-			} else {
-				*password = 0x20;
-				carry = 1;
-			}
-		} else {
-			return 0;
-		}
-		password++;
-		max_len -= 1;
-	}
-	if(max_len < 0){
-		return 0;
-	} else {
-		return 1;
-	}
+//    printf("inc %s\n", p);
+    do {
+        n = *p ? _rs[*p]: 0;
+//        printf("  %c:%d\n", *p, _rs[*p]);
+        n += inc + c;
+        c = n / _len;
+        *p++ = _set[n % _len];
+        inc = 0;
+//        printf("  new: %c\n", _set[n % _len]);
+//        printf("  car: %d\n", c);
+    } while(c || *p);
+
+    *p = 0;
+
+    return 1;
 }
 
-int crack(uint8_t *ciphertext, long length, char *crib, int max_len, int charset, char *start_passwd, FILE *dict){
-	char password[32] = {0};
+int crack(uint8_t *ciphertext, long length, long long *counter, int inc, char *start_passwd, FILE *dict){
+	char *password = start_passwd;
 	char *newline;
 	char *plaintext;
 	uint32_t key[3];
 	long i;
-	int running;
+	int running = 1;
+        char *crib = NULL;
 
+#if 0
 	if(start_passwd){
 		strncpy(password, start_passwd, sizeof(password));
 	}
 	password[sizeof(password)-1] = 0;
+#endif
 
 	plaintext = malloc(length+1);
 	if(plaintext == NULL){
@@ -190,14 +129,17 @@ int crack(uint8_t *ciphertext, long length, char *crib, int max_len, int charset
 				printf("Plaintext: %-32s\n", plaintext);
 			}
 		} else {
-			for(i = 0; i < length; i++){
+                        int len = CHECK_LEN;
+                        if(length < len) len = length;
+			for(i = 0; i < len; i++){
 				if(plaintext[i] < 0x9 || (0xd < plaintext[i] && plaintext[i] < 0x20) || plaintext[i] == 0xc || 0x7e < plaintext[i]){
 					break;
 				}
 			}
-			if(i == length){
+			if(i == len){
 				printf("Possible password: '%s'\n", password);
 				printf("Plaintext: %-32s\n", plaintext);
+                                exit(0);
 			}
 		}
 		if(dict){
@@ -209,11 +151,72 @@ int crack(uint8_t *ciphertext, long length, char *crib, int max_len, int charset
 				*newline = 0;
 			}
 		} else {
-			running = inc_password(password, max_len, charset);
+			running = inc_password(password, inc);
+                        *counter += running;
 		}
 	}
 
 	return 0;
+}
+
+struct fiber_info {
+    uint8_t data[1024];
+    int len;
+    int inc;
+    char start[256];
+    pthread_t id;
+    long long counter;
+};
+
+void *fiber(void *x) {
+    struct fiber_info *info = x;
+    crack(info->data, info->len, &info->counter, info->inc, info->start, NULL);
+    return 0;
+}
+
+void start_fibers(uint8_t *data, int len, int count)
+{
+    int i, _i;
+    char *p, *u = " kmb";
+    struct fiber_info info[100];
+    double hi;
+
+    for(i = 0; i < count; i++) {
+        memcpy(info[i].data, data, len);
+        info[i].len = len;
+        info[i].inc = count;
+
+#if 0
+        p = info[i].start;
+        _i = i;
+        while(_i >= 0) {
+            *p++ = _set[_i % _len];
+            _i -= _len;
+        }
+        *p = 0;
+#endif
+
+        info[i].counter = 0;
+        inc_password(info[i].start, i);
+
+        pthread_create(&info[i].id, NULL, fiber, &info[i]);
+
+        printf("thread created\n");
+    }
+
+    printf("%d threads running... \n", count);
+
+    for(;;) {
+        hi = 0;
+        for (i = 0; i < count; i++) {
+            hi += info[i].counter;
+        }
+
+        for (p = u; hi > 1000 && *p != 'b'; hi /= 1000, p++);
+        fprintf(stdout, "\r%.1f%c tested :: %s        ", hi, *p, info[0].start);
+        fflush(stdout);
+        usleep(500000);
+    }
 }
 
 void help(){
@@ -223,7 +226,7 @@ void help(){
 	fprintf(stderr, "\t-b nbytes (default: 128)\n");
 	fprintf(stderr, "\t-d dict_file\n");
 	fprintf(stderr, "\t-p start_password (default: emty string)\n");
-	fprintf(stderr, "\t-C charset (default: 0)\n");
+	fprintf(stderr, "\t-C thread count (default: 1)\n");
 	fprintf(stderr, "\t-l max_passwd_len (default: 6)\n");
 	fprintf(stderr, "\t-c crib\n");
 	fprintf(stderr, "\n");
@@ -235,7 +238,7 @@ int main(int argc, char *argv[]){
 	uint8_t *filedata;
 	long filesize;
 	int max_len = 6;
-	int charset = 0;
+	int threads = 1;
 	char *start_passwd = NULL;
 	char *dict_filename;
 	FILE *dict = NULL;
@@ -271,14 +274,10 @@ int main(int argc, char *argv[]){
 			} else if(strcmp(argv[0], "-C") == 0){
 				argc--; argv++;
 				if(0 < argc){
-					charset = atoi(argv[0]);
-					if(charset < 0 || 3 < charset){
-						fprintf(stderr, "Invalid character set\n");
-						exit(1);
-					}
+					threads = atoi(argv[0]);
 					argc--; argv++;
 				} else {
-					fprintf(stderr, "\t-c [charset]\n\n");
+					fprintf(stderr, "\t-c [threads]\n\n");
 					fprintf(stderr, "Character set for password generation\n");
 					fprintf(stderr, "\t0: lower alpha (Default)\n");
 					fprintf(stderr, "\t1: upper alpha\n");
@@ -357,7 +356,7 @@ int main(int argc, char *argv[]){
 	} else {
 		printf("using brute force\n");
 		printf("max password length: %d\n", max_len);
-		printf("charset: %d\n", charset);
+		printf("threads: %d\n", threads);
 		if(start_passwd){
 			printf("starting with password: %s\n", start_passwd);
 		}
@@ -368,6 +367,11 @@ int main(int argc, char *argv[]){
 	if(nbytes == 0 || nbytes > filesize - 12){
 		nbytes = filesize - 12;
 	}
-	crack(filedata+12, nbytes, crib, max_len, charset, start_passwd, dict);
+
+        char *p = _set;
+        for(; *p; p++, _len++)
+            _rs[*p] = _len;
+
+        start_fibers(filedata+12, nbytes, threads);
 	return 0;
 }
