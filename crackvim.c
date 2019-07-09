@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "pkzip_crypto.h"
 #include "crc32.h"
@@ -202,7 +203,7 @@ void start_fibers(uint8_t *data, int len, int count)
     int i, _i;
     char *p, *u = " kmb";
     struct fiber_info info[100];
-    double hi;
+    double hi, sp;
 
     for(i = 0; i < count; i++) {
         memcpy(info[i].data, data, len);
@@ -228,14 +229,22 @@ void start_fibers(uint8_t *data, int len, int count)
 
     printf("%d threads running... \n", count);
 
+    struct timeval t0, t1;
+    gettimeofday(&t0, NULL);
     for(;;) {
         hi = 0;
         for (i = 0; i < count; i++) {
             hi += info[i].counter;
         }
 
+        gettimeofday(&t1, NULL);
+        sp = hi / ((t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec) * 1000000;
+
         for (p = u; hi > 1000 && *p != 'b'; hi /= 1000, p++);
-        fprintf(stderr, "\r%.1f%c tested :: %s        ", hi, *p, info[0].start);
+        fprintf(stderr, "\r%.1f%c tested, ", hi, *p);
+
+        for (p = u; sp > 1000 && *p != 'b'; sp /= 1000, p++);
+        fprintf(stderr, "%.1f%c words/s :: %s   ", sp, *p, info[0].start);
         fflush(stderr);
         usleep(500000);
     }
