@@ -1,4 +1,4 @@
-all: crackvim
+all: crackvim zip
 
 
 pkzip_crypto.o: pkzip_crypto.c pkzip_crypto.h
@@ -12,6 +12,9 @@ crc32.o: crc32.c
 
 crackvim: crackvim.o crc32.o pkzip_crypto.o
 	gcc -pthread -o $@ $^
+
+zip:
+	g++ -std=c++11 zipforce.cpp
 
 .PHONY: clean
 
