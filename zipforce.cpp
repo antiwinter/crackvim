@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <iostream>
 #include <thread>
@@ -117,9 +118,11 @@ void fiber_loop(class fiber *fb) {
 loop:
 
   fb->dec.reset(fb->pass);
+  // fb->dec.reset("lenin");
   if (fb->dec.test()) {
     printf("possible solution %s  :::  %s\n", fb->pass, fb->dec.text);
   }
+  fb->count++;
   fb->next();
   goto loop;
 }
@@ -128,6 +131,7 @@ void fiber::start(int id, int val) {
   this->id = id;
   interval = val;
   pass[0] = 0;
+  count = 0;
 
   next();
   th = std::thread(fiber_loop, this);
@@ -148,6 +152,8 @@ int main(int argc, char *argv[]) {
 
   // init cipher
   int fd = open(argv[1], O_RDONLY);
+  uint8_t buf[20];
+  read(fd, buf, 12);
   int len = read(fd, _cipher, 1000);
   _cipher[len] = 0;
   close(fd);
@@ -166,4 +172,30 @@ int main(int argc, char *argv[]) {
     fb[i]->start(i, tn);
   }
   fb[i] = NULL;
+
+  struct timeval t0, t1;
+  gettimeofday(&t0, NULL);
+
+  for (;;) {
+    double hi = 0, sp;
+    const char *u = " kmb";
+
+    for (i = 0; i < tn; i++) {
+      hi += fb[i]->count;
+    }
+
+    gettimeofday(&t1, NULL);
+    sp = hi / ((t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec) *
+         1000000;
+
+    for (p = u; hi > 1000 && *p != 'b'; hi /= 1000, p++)
+      ;
+    fprintf(stderr, "\r%.1f%c tested, ", hi, *p);
+
+    for (p = u; sp > 1000 && *p != 'b'; sp /= 1000, p++)
+      ;
+    fprintf(stderr, "%.1f%c words/s :: %s   ", sp, *p, fb[0]->pass);
+    fflush(stderr);
+    usleep(500000);
+  }
 }
