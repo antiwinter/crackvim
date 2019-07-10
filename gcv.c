@@ -25,21 +25,19 @@ struct fiber_params {
   uint8_t *cipher;
   uint8_t *base;
   pthread_t pid;
-  int *n_found;
   int id;
 };
 
 void *fiber(void *input) {
   struct fiber_params *fp = (struct fiber_params *)input;
-  _fiber(fp->salt, fp->cipher, fp->base, fp->pass, fp->out, fp->n_found, fp->n,
-         fp->id);
+  _fiber(fp->salt, fp->cipher, fp->base, fp->pass, fp->out, fp->n, fp->id);
 
   return NULL;
 }
 
 int run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
                uint8_t *out, int count, int threads) {
-  int i, each = (count + threads - 1) / threads, n_found = 0;
+  int i, each = (count + threads - 1) / threads;
   struct fiber_params fp[THREAD_MAX];
 
   for (i = 0; i < threads; i++) {
@@ -48,14 +46,13 @@ int run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
     fp[i].base = base;
     fp[i].n = each;
     fp[i].id = i;
-    fp[i].n_found = &n_found;
     strncpy((char *)fp[i].pass, (char *)pass, PASS_MAX);
     fp[i].out = out;
     pthread_create(&fp[i].pid, NULL, fiber, &fp[i]);
   }
 
   for (i = 0; i < threads; i++) pthread_join(fp[i].pid, NULL);
-  return n_found;
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -96,14 +93,15 @@ int main(int argc, char *argv[]) {
 
   uint8_t *out = malloc(OUT_LEN);
   for (;; ai += GROUP) {
-    // int n_found = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
-    int n_found = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
+    *(uint32_t *)out = 4;
+    int err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
+    // int err = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
 
-    if (n_found < 0) return n_found;
-    if (n_found) {
+    if (err) return err;
+    if (*(uint32_t *)out) {
       // printf("%d found:\n", n_found / 16);
       uint8_t txt[MSG_MAX], _pass[PASS_MAX], *p;
-      for (p = out; *p; p += PASS_MAX) {
+      for (p = out + 4; *p; p += PASS_MAX) {
         strncpy((char *)_pass, (char *)p, PASS_MAX);
         dec_u8(cipher, salt, _pass, txt);
         printf("%s   %s\n", _pass,

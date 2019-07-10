@@ -11,6 +11,7 @@ static inline int atomic_add(volatile int *a, int v) {
   *a += v;
   return t;
 }
+#else
 #endif
 
 #define PASS_MAX 16
@@ -78,10 +79,10 @@ int dec_u8(uchar *cipher, uint *salt, uchar *pass, uchar *txt) {
 __kernel void _fiber(
 #ifndef __OPENCL_VERSION__
     uint *salt, uchar *cipher, uchar *base, uchar *pass, uchar *out,
-    int *n_found, const int count, const int id
+    const int count, const int id
 #else
     __global uint *g_salt, __global uchar *g_cipher, __global uchar *g_base,
-    __global uchar *g_pass, __global uchar *out, volatile __global int *n_found,
+    __global uchar *g_pass, volatile __global uchar *out, __global uchar *log,
     const int count
 #endif
 ) {
@@ -107,13 +108,13 @@ __kernel void _fiber(
 #endif
 
   update_pass(pass, id * count, base);
-  *out = 0;
+  *(out + 4) = 0;
 
   for (; n--; update_pass(pass, 1, base)) {
     if (dec_u8(cipher, salt, pass, 0)) {
       uchar *p;
       __global uchar *q;
-      int cursor = atomic_add(n_found, PASS_MAX);
+      int cursor = atomic_add((volatile __global int *)out, PASS_MAX);
       p = pass;
       q = &out[cursor];
       cursor += PASS_MAX;
