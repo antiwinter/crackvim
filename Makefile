@@ -17,7 +17,7 @@ zip:
 	g++ -std=c++11 zipforce.cpp
 
 gc:
-	gcc gc-vim.c
+	gcc gcv.c
 
 zfp:
 	g++ -std=c++11 -framework OpenCL -Wno-deprecated-declarations zfg.cpp 
