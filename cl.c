@@ -34,7 +34,7 @@ int print_buffer(uint32_t addr, void *data, uint width, uint count,
 
   for (i = count * width - 1; !*(((uint8_t *)data) + i) && i; i--)
     ;
-  count = (i + 1) / width;
+  count = (i + 1) / width + 4;
 
   if (linelen * width > MAX_LINE_LENGTH_BYTES)
     linelen = MAX_LINE_LENGTH_BYTES / width;
@@ -118,7 +118,12 @@ int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
     return -1;
   }
 
-  cl_kernel kernel = clCreateKernel(program, "fiber", &err);
+  cl_kernel kernel = clCreateKernel(program, "_fiber", &err);
+
+  if (err) {
+    printf("cl kernel error %d\n", err);
+    return -1;
+  }
 
   // prepare arguments
   cl_mem k_salt = cli_init_buffer(ctx, cq, salt, sizeof(uint32_t) * 256);
@@ -136,20 +141,22 @@ int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
   clSetKernelArg(kernel, 5, sizeof(cl_mem), &k_log);
   clSetKernelArg(kernel, 6, sizeof(int), &k_count);
 
-  size_t local;
-  clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
-                           sizeof(local), &local, NULL);
+  size_t local, global = count / COUNT;
 
-  size_t global = count / COUNT;
-  clEnqueueNDRangeKernel(cq, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
+  err = CL_INVALID_DEVICE;
+  err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
+                                 sizeof(local), &local, NULL);
 
-  printf("  %zu threads (each %d job), local=%zu\n", global, COUNT, local);
+  if (local > global) local = global;
+  err = clEnqueueNDRangeKernel(cq, kernel, 1, NULL, &global, &local, 0, NULL,
+                               NULL);
+
+  // printf("%d:  %zu threads (each %d job), local=%zu\n", err, global, COUNT,
+  //        local);
   clFinish(cq);
   clEnqueueReadBuffer(cq, k_out, CL_TRUE, 0, OUT_LEN, out, 0, NULL, NULL);
-  clEnqueueReadBuffer(cq, k_log, CL_TRUE, 0, BUF_SIZE, log, 0, NULL, NULL);
-  clFinish(cq);
-
-  print_buffer(0, src, 4, BUF_SIZE / 4, 4);
+  // clEnqueueReadBuffer(cq, k_log, CL_TRUE, 0, BUF_SIZE, log, 0, NULL, NULL);
+  // print_buffer(0, log, 4, BUF_SIZE / 4, 4);
 
   // clear up
   clReleaseMemObject(k_salt);

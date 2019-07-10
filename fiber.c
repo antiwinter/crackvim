@@ -95,7 +95,7 @@ __kernel void _fiber(
   do {                                  \
     _t *_p = _v;                        \
     __global _t *_q = g_##_v;           \
-    int _i;                             \
+    int _i = 0;                         \
     for (; _i < l; _i++) *_p++ = *_q++; \
   } while (0)
 
@@ -105,13 +105,15 @@ __kernel void _fiber(
   get(uchar, pass, 16);
 #undef get
 
-#define puts(_s)                \
-  do {                          \
-    __constant char *__s = _s;  \
-    int _i = 0;                 \
-    do {                        \
-      *log++ = *__s++;          \
-    } while (*__s || (_i & 3)); \
+#define puts(_s)                     \
+  do {                               \
+    __constant char *__s = _s;       \
+    int _i = 0;                      \
+    do {                             \
+      *log++ = *__s++;               \
+      _i++;                          \
+    } while (*__s);                  \
+    for (; _i & 3; _i++) *log++ = 0; \
   } while (0)
 
 #define putn(_p, _n)                       \
@@ -124,11 +126,11 @@ __kernel void _fiber(
   int id = get_global_id(0);
 #endif
 
-  puts("hello cl");
-  putn(&id, 4);
+  // puts("hello cl");
+  // putn(&id, 4);
 
-  puts("count");
-  putn(&count, 4);
+  // puts("count");
+  // putn(&count, 4);
 
   update_pass(pass, id * count, base);
   *(out + 4) = 0;
@@ -136,15 +138,15 @@ __kernel void _fiber(
   for (; n--; update_pass(pass, 1, base)) {
     if (dec_u8(cipher, salt, pass, 0)) {
       uchar *p;
-      __global uchar *q;
+      volatile __global uchar *q;
       int cursor = atomic_add((volatile __global int *)out, PASS_MAX);
       p = pass;
       q = &out[cursor];
       cursor += PASS_MAX;
       out[cursor] = 0;
       do {
-        *q++ = *p++;
-      } while (*p);
+        *q++ = *p;
+      } while (*p++);
     }
   }
 }
