@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
   gettimeofday(&t0, NULL);
 
   double ai = 0, hi, sp;
-  uint8_t *u = (uint8_t *)" kmb";
+  uint8_t *u = (uint8_t *)" kmgt";
   uint8_t pass[PASS_MAX] = {0};
 
   for (;; ai += GROUP) {
@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
     update_pass(pass, GROUP, base);
 
     gettimeofday(&t1, NULL);
-#define get_unit(_x) for (p = u; _x > 1000 && *p != 'b'; _x /= 1000, p++)
+#define get_unit(_x) for (p = u; _x > 1000 && *(p + 1); _x /= 1000, p++)
     hi = ai + GROUP;
     sp = hi / ((t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec) *
          1000000;
