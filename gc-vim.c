@@ -14,7 +14,7 @@
 #endif
 
 #define BASE "abcdefghijklmnopqrstuvwxyz_1234567890."
-#define GROUP 2048
+#define GROUP (1 << 22)
 #define PASS_MAX 16
 #define THREAD_MAX 100
 
@@ -41,8 +41,8 @@ void update_key(uint salt[], uint key[3], uchar c) {
 }
 
 void update_pass(char pass[], int inc, uchar *base) {
-  char *p = pass, c = 0;
-  int len = *(uint *)base, n;
+  char *p = pass;
+  int len = *(uint *)base, n, c = 0;
   char *set = (char *)(base + 4);
   char *rs = (char *)(base + 64);
 
@@ -93,14 +93,15 @@ struct fiber_params {
   uchar *cipher;
   uchar *base;
   pthread_t pid;
+  int id;
 };
 
 void *fiber(void *input) {
   struct fiber_params *fp = (struct fiber_params *)input;
-  pthread_t id = pthread_self();  // global_id
   int cursor = 0;
 
-  update_pass(fp->pass, (int)id * fp->n, fp->base);
+  update_pass(fp->pass, fp->id * fp->n, fp->base);
+  // sprintf(fp->pass, "lenin");
   *fp->out = 0;
   for (; fp->n--; update_pass(fp->pass, 1, fp->base)) {
     uint key[3] = {305419896, 591751049, 878082192};
@@ -131,6 +132,7 @@ void run_fibers(uint *salt, uchar *cipher, uchar *base, char *pass, int count,
     fp[i].cipher = cipher;
     fp[i].base = base;
     fp[i].n = each;
+    fp[i].id = i;
     strncpy(fp[i].pass, pass, PASS_MAX);
     fp[i].out = malloc(each * PASS_MAX + 4);
     pthread_create(&fp[i].pid, NULL, fiber, &fp[i]);
@@ -174,7 +176,7 @@ int main(int argc, char *argv[]) {
   uint8_t base[512], *rs = base + 64, *p = base + 4;
   int *bl = (int *)base;
   sprintf((char *)base + 4, BASE);
-  for (; *p; p++, (*bl)++) rs[*p] = *bl;
+  for (*bl = 0; *p; p++, (*bl)++) rs[*p] = *bl;
 
   // start
   struct timeval t0, t1;
