@@ -7,12 +7,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#if !defined(USE_CL)
-#define uchar uint8_t
-#define ushort uint16_t
-#define uint uint32_t
-#endif
-
 #define BASE "abcdefghijklmnopqrstuvwxyz_1234567890."
 #define GROUP (1 << 22)
 #define PASS_MAX 16
@@ -33,97 +27,27 @@ void init_salt(uint32_t salt[]) {
   }
 }
 
-void update_key(uint salt[], uint key[3], uchar c) {
-  key[0] = salt[(key[0] ^ c) & 0xff] ^ (key[0] >> 8);
-  key[1] = key[1] + (key[0] & 0xff);
-  key[1] = key[1] * 134775813 + 1;
-  key[2] = salt[(key[2] ^ (key[1] >> 24)) & 0xff] ^ (key[2] >> 8);
-}
-
-void update_pass(char pass[], int inc, uchar *base) {
-  char *p = pass;
-  int len = *(uint *)base, n, c = 0;
-  char *set = (char *)(base + 4);
-  char *rs = (char *)(base + 64);
-
-  do {
-    n = *p ? rs[*p] : 0;
-    n += inc + c;
-    c = n / len;
-    *p++ = set[n % len];
-    inc = 0;
-  } while (c || *p);
-
-  *p = 0;
-}
-
-int dec_u8(uchar *cipher, uint salt[], uint key[]) {
-  uchar *p = cipher, x, c = 0, n;
-
-  for (; *p;) {
-    // dec cipher
-    ushort t = key[2] | 2;
-    x = *p++ ^ ((t * (t ^ 1)) >> 8);
-
-    // check if u8
-    if (c) {
-      if (((x >> 6) & 3) != 2) return 0;
-      c--;
-    } else {
-      if (x & 0x80) {
-        for (n = x; n & 0x80; c++, n <<= 1)
-          ;
-        if (c < 2 || c > 3) return 0;
-        c--;
-      }
-    }
-
-    // next
-    update_key(salt, key, x);
-  }
-
-  return 1;
-}
+#include "fiber.c"
 
 struct fiber_params {
-  uint *salt;
-  char pass[PASS_MAX];
+  uint32_t *salt;
+  uint8_t pass[PASS_MAX];
   int n;  // count of passwords
-  char *out;
-  uchar *cipher;
-  uchar *base;
+  uint8_t *out;
+  uint8_t *cipher;
+  uint8_t *base;
   pthread_t pid;
   int id;
 };
 
 void *fiber(void *input) {
   struct fiber_params *fp = (struct fiber_params *)input;
-  int cursor = 0;
-
-  update_pass(fp->pass, fp->id * fp->n, fp->base);
-  // sprintf(fp->pass, "lenin");
-  *fp->out = 0;
-  for (; fp->n--; update_pass(fp->pass, 1, fp->base)) {
-    uint key[3] = {305419896, 591751049, 878082192};
-    char *p = fp->pass, *q;
-    for (; *p;) update_key(fp->salt, key, *p++);
-
-    if (dec_u8(fp->cipher, fp->salt, key)) {
-      p = fp->pass;
-      q = &fp->out[cursor];
-      cursor += PASS_MAX;
-      fp->out[cursor] = 0;
-      do {
-        *q++ = *p++;
-      } while (*p);
-    }
-  }
-
+  _fiber(fp->salt, fp->cipher, fp->base, fp->pass, fp->out, fp->n, fp->id);
   return NULL;
 }
 
-void run_fibers(uint *salt, uchar *cipher, uchar *base, char *pass, int count,
-                int threads) {
+void run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
+                int count, int threads) {
   int i, each = (count + threads - 1) / threads;
   struct fiber_params fp[THREAD_MAX];
 
@@ -133,13 +57,13 @@ void run_fibers(uint *salt, uchar *cipher, uchar *base, char *pass, int count,
     fp[i].base = base;
     fp[i].n = each;
     fp[i].id = i;
-    strncpy(fp[i].pass, pass, PASS_MAX);
+    strncpy((char *)fp[i].pass, (char *)pass, PASS_MAX);
     fp[i].out = malloc(each * PASS_MAX + 4);
     pthread_create(&fp[i].pid, NULL, fiber, &fp[i]);
   }
 
   for (i = 0; i < threads; i++) {
-    char *p = fp[i].out;
+    uint8_t *p = fp[i].out;
     pthread_join(fp[i].pid, NULL);
     for (; *p; p += PASS_MAX) {
       printf("%s\n", p);  // possible solution
@@ -184,7 +108,7 @@ int main(int argc, char *argv[]) {
 
   double ai = 0, hi, sp;
   uint8_t *u = (uint8_t *)" kmb";
-  char pass[PASS_MAX] = {0};
+  uint8_t pass[PASS_MAX] = {0};
 
   for (;; ai += GROUP) {
     run_fibers(salt, cipher, base, pass, GROUP, tn);
