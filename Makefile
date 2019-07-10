@@ -1,4 +1,4 @@
-all: crackvim zip
+all: crackvim zip zfp gc
 
 
 pkzip_crypto.o: pkzip_crypto.c pkzip_crypto.h
@@ -15,6 +15,12 @@ crackvim: crackvim.o crc32.o pkzip_crypto.o
 
 zip:
 	g++ -std=c++11 zipforce.cpp
+
+gc:
+	gcc gc-vim.c
+
+zfp:
+	g++ -std=c++11 -framework OpenCL -Wno-deprecated-declarations zfg.cpp 
 
 .PHONY: clean
 
