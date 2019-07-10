@@ -94,9 +94,9 @@ int main(int argc, char *argv[]) {
   uint8_t *out = malloc(OUT_LEN);
   for (;; ai += GROUP) {
     *(uint32_t *)out = 4;
-    int err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
-    // int err = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
-
+    // int err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
+    int err = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
+    exit(0);
     if (err) return err;
     if (*(uint32_t *)out) {
       // printf("%d found:\n", n_found / 16);

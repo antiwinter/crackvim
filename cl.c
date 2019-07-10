@@ -21,6 +21,60 @@ static cl_mem cli_init_buffer(cl_context ctx, cl_command_queue cq, void *buf,
 #define COUNT 2048
 #define BUF_SIZE 8192
 
+#include <ctype.h>
+#define MAX_LINE_LENGTH_BYTES (64)
+#define DEFAULT_LINE_LENGTH_BYTES (16)
+int print_buffer(uint32_t addr, void *data, uint width, uint count,
+                 uint linelen) {
+  uint8_t linebuf[MAX_LINE_LENGTH_BYTES];
+  uint32_t *uip = (void *)linebuf;
+  uint16_t *usp = (void *)linebuf;
+  uint8_t *ucp = (void *)linebuf;
+  int i;
+
+  for (i = count * width - 1; !*(((uint8_t *)data) + i) && i; i--)
+    ;
+  count = (i + 1) / width;
+
+  if (linelen * width > MAX_LINE_LENGTH_BYTES)
+    linelen = MAX_LINE_LENGTH_BYTES / width;
+  if (linelen < 1) linelen = DEFAULT_LINE_LENGTH_BYTES / width;
+
+  while (count) {
+    printf("%08x:", addr);
+
+    /* check for overflow condition */
+    if (count < linelen) linelen = count;
+
+    /* Copy from memory into linebuf and print hex values */
+    for (i = 0; i < linelen; i++) {
+      if (width == 4) {
+        uip[i] = *(volatile uint32_t *)data;
+        printf(" %08x", uip[i]);
+      } else if (width == 2) {
+        usp[i] = *(volatile uint16_t *)data;
+        printf(" %04x", usp[i]);
+      } else {
+        ucp[i] = *(volatile uint8_t *)data;
+        printf(" %02x", ucp[i]);
+      }
+      data += width;
+    }
+
+    /* Print data in ASCII characters */
+    printf("    ");
+    for (i = 0; i < linelen * width; i++)
+      putc(isprint(ucp[i]) && (ucp[i] < 0x80) ? ucp[i] : '.', stdout);
+    printf("\n");
+
+    /* update references */
+    addr += linelen * width;
+    count -= linelen;
+  }
+
+  return 0;
+}
+
 int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
                   uint8_t *out, int count) {
   int err, fd, k_count = COUNT, cu_n;
@@ -90,9 +144,12 @@ int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
   clEnqueueNDRangeKernel(cq, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
 
   printf("  %zu threads (each %d job), local=%zu\n", global, COUNT, local);
+  clFinish(cq);
   clEnqueueReadBuffer(cq, k_out, CL_TRUE, 0, OUT_LEN, out, 0, NULL, NULL);
   clEnqueueReadBuffer(cq, k_log, CL_TRUE, 0, BUF_SIZE, log, 0, NULL, NULL);
   clFinish(cq);
+
+  print_buffer(0, src, 4, BUF_SIZE / 4, 4);
 
   // clear up
   clReleaseMemObject(k_salt);

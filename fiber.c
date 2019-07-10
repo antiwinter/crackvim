@@ -11,6 +11,7 @@ static inline int atomic_add(volatile int *a, int v) {
   *a += v;
   return t;
 }
+#define putn(...)
 #else
 #endif
 
@@ -104,8 +105,30 @@ __kernel void _fiber(
   get(uchar, pass, 16);
 #undef get
 
+#define puts(_s)                \
+  do {                          \
+    __constant char *__s = _s;  \
+    int _i = 0;                 \
+    do {                        \
+      *log++ = *__s++;          \
+    } while (*__s || (_i & 3)); \
+  } while (0)
+
+#define putn(_p, _n)                       \
+  do {                                     \
+    uchar *__p = (uchar *)_p;              \
+    int _i = 0;                            \
+    for (; _i < _n; _i++) *log++ = *__p++; \
+  } while (0)
+
   int id = get_global_id(0);
 #endif
+
+  puts("hello cl");
+  putn(&id, 4);
+
+  puts("count");
+  putn(&count, 4);
 
   update_pass(pass, id * count, base);
   *(out + 4) = 0;
