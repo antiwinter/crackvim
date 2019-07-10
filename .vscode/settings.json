@@ -1,5 +1,10 @@
 {
   "files.associations": {
-    "cmath": "c"
+    "cmath": "c",
+    "array": "c",
+    "*.tcc": "c",
+    "istream": "c",
+    "tuple": "c",
+    "utility": "c"
   }
 }

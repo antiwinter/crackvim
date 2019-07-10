@@ -48,22 +48,22 @@ int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
   clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
   clGetDeviceInfo(device_id, CL_DEVICE_NAME, 64, name, NULL);
 
-  printf("using %s\n", name);
-  printf("  %d CUs\n", cu_n);
+  // printf("using %s\n", name);
+  // printf("  %d CUs\n", cu_n);
 
   // prepare kernel
   cl_context ctx = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-  printf("%s %d\n", __func__, __LINE__);
+  // printf("%s %d\n", __func__, __LINE__);
 
   cl_command_queue cq = clCreateCommandQueue(ctx, device_id, 0, &err);
-  printf("%s %d\n", __func__, __LINE__);
+  // printf("%s %d\n", __func__, __LINE__);
 
   // printf("source is %s\n%zu\n", src, len);
   cl_program program =
       clCreateProgramWithSource(ctx, 1, (const char **)&src, NULL, &err);
-  printf("%s %d\n", __func__, __LINE__);
+  // printf("%s %d\n", __func__, __LINE__);
   err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-  printf("%s %d\n", __func__, __LINE__);
+  // printf("%s %d\n", __func__, __LINE__);
 
   if (err) {
     clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 8192, log,
