@@ -11,6 +11,7 @@
 #define GROUP (1 << 22)
 #define PASS_MAX 16
 #define THREAD_MAX 100
+#define MSG_MAX 1048
 
 void init_salt(uint32_t salt[]) {
   uint32_t n, k, c;
@@ -37,19 +38,23 @@ struct fiber_params {
   uint8_t *cipher;
   uint8_t *base;
   pthread_t pid;
+  int *n_found;
   int id;
 };
 
 void *fiber(void *input) {
   struct fiber_params *fp = (struct fiber_params *)input;
-  _fiber(fp->salt, fp->cipher, fp->base, fp->pass, fp->out, fp->n, fp->id);
+  _fiber(fp->salt, fp->cipher, fp->base, fp->pass, fp->out, fp->n_found, fp->n,
+         fp->id);
+
   return NULL;
 }
 
 void run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
                 int count, int threads) {
-  int i, each = (count + threads - 1) / threads;
+  int i, each = (count + threads - 1) / threads, n_found = 0;
   struct fiber_params fp[THREAD_MAX];
+  uint8_t *out = malloc(each * PASS_MAX + 4), *p;
 
   for (i = 0; i < threads; i++) {
     fp[i].salt = salt;
@@ -57,19 +62,26 @@ void run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
     fp[i].base = base;
     fp[i].n = each;
     fp[i].id = i;
+    fp[i].n_found = &n_found;
     strncpy((char *)fp[i].pass, (char *)pass, PASS_MAX);
-    fp[i].out = malloc(each * PASS_MAX + 4);
+    fp[i].out = out;
     pthread_create(&fp[i].pid, NULL, fiber, &fp[i]);
   }
 
-  for (i = 0; i < threads; i++) {
-    uint8_t *p = fp[i].out;
-    pthread_join(fp[i].pid, NULL);
-    for (; *p; p += PASS_MAX) {
-      printf("%s\n", p);  // possible solution
+  for (i = 0; i < threads; i++) pthread_join(fp[i].pid, NULL);
+
+  if (n_found) {
+    // printf("%d found:\n", n_found / 16);
+    uint8_t txt[MSG_MAX];
+    uint8_t _pass[PASS_MAX];
+    for (p = out; *p; p += PASS_MAX) {
+      strncpy((char *)_pass, (char *)p, PASS_MAX);
+      dec_u8(cipher, salt, _pass, txt);
+      printf("%s   %s\n", _pass, txt);  // possible solution
     }
-    free(fp[i].out);
   }
+
+  free(out);
 }
 
 void run_fibers_cl() {}
@@ -85,10 +97,10 @@ int main(int argc, char *argv[]) {
   int i, tn = th ? atoi(th) : 1;
 
   // init cipher
-  uint8_t cipher[1048];
+  uint8_t cipher[MSG_MAX];
   int fd = open(argv[1], O_RDONLY);
   read(fd, cipher, 12);
-  int len = read(fd, cipher, 1000);
+  int len = read(fd, cipher, MSG_MAX - 48);
   cipher[len] = 0;
   close(fd);
 
@@ -112,10 +124,11 @@ int main(int argc, char *argv[]) {
 
   for (;; ai += GROUP) {
     run_fibers(salt, cipher, base, pass, GROUP, tn);
+    update_pass(pass, GROUP, base);
 
     gettimeofday(&t1, NULL);
 #define get_unit(_x) for (p = u; _x > 1000 && *p != 'b'; _x /= 1000, p++)
-    hi = ai;
+    hi = ai + GROUP;
     sp = hi / ((t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec) *
          1000000;
     get_unit(hi);
@@ -125,6 +138,5 @@ int main(int argc, char *argv[]) {
 #undef get_unit
 
     fflush(stderr);
-    update_pass(pass, GROUP, base);
   }
 }

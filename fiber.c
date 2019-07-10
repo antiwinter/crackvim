@@ -6,6 +6,11 @@
 #define __kernel
 #define __private
 #define __global
+static inline int atomic_add(volatile int *a, int v) {
+  int t = *a;
+  *a += v;
+  return t;
+}
 #endif
 
 #define PASS_MAX 16
@@ -72,13 +77,14 @@ int dec_u8(uchar *cipher, uint salt[], uchar *pass, uchar *txt) {
 
 __kernel void _fiber(__private uint *salt, __private uchar *cipher,
                      __private uchar *base, __private uchar *pass,
-                     __global uchar *out, const int count
+                     __global uchar *out, volatile __global int *n_found,
+                     const int count
 #ifndef __OPENCL_VERSION__
                      ,
                      const int id
 #endif
 ) {
-  int cursor = 0, n = count;
+  int n = count;
 
 #ifdef __OPENCL_VERSION__
   int id = get_global_id(0);
@@ -90,6 +96,7 @@ __kernel void _fiber(__private uint *salt, __private uchar *cipher,
   for (; n--; update_pass(pass, 1, base)) {
     if (dec_u8(cipher, salt, pass, 0)) {
       uchar *p, *q;
+      int cursor = atomic_add(n_found, PASS_MAX);
       p = pass;
       q = &out[cursor];
       cursor += PASS_MAX;
