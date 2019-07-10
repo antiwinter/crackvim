@@ -96,9 +96,10 @@ int main(int argc, char *argv[]) {
 
   uint8_t *out = malloc(OUT_LEN);
   for (;; ai += GROUP) {
-    int n_found = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
-    // int n_found = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
+    // int n_found = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
+    int n_found = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
 
+    if (n_found < 0) return n_found;
     if (n_found) {
       // printf("%d found:\n", n_found / 16);
       uint8_t txt[MSG_MAX], _pass[PASS_MAX], *p;

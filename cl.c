@@ -22,13 +22,25 @@ static cl_mem cli_init_buffer(cl_context ctx, cl_command_queue cq, void *buf,
 
 int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
                   uint8_t *out, int count) {
-  int err, fd, len, n_found = 0, k_count = COUNT, cu_n;
-  char src[8192], name[64], log[8192];
+  int err, fd, n_found = 0, k_count = COUNT, cu_n;
+  char name[64], log[8192];
+  size_t len;
 
+  char *src = malloc(8192);
   fd = open("./fiber.c", O_RDONLY);
   len = read(fd, src, 8192);
   src[len] = 0;
   close(fd);
+
+  // sprintf(
+  //     src,
+  //     "__kernel void square(__global float* input, __global float* output, "
+  //     "const "
+  //     "unsigned int count) { \n"
+  //     "   int i = get_global_id(0); " "  " "                      \n" " if(i
+  //     < count) { output[i] = input[i] * input[i]; }                   " "  "
+  //     "                      \n"
+  //     "}");
 
   // prepare device
   cl_device_id device_id;
@@ -41,15 +53,25 @@ int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
 
   // prepare kernel
   cl_context ctx = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
+  printf("%s %d\n", __func__, __LINE__);
+
   cl_command_queue cq = clCreateCommandQueue(ctx, device_id, 0, &err);
+  printf("%s %d\n", __func__, __LINE__);
+
+  // printf("source is %s\n%zu\n", src, len);
   cl_program program =
       clCreateProgramWithSource(ctx, 1, (const char **)&src, NULL, &err);
-  clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+  printf("%s %d\n", __func__, __LINE__);
+  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+  printf("%s %d\n", __func__, __LINE__);
 
-  clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 8192, log,
-                        NULL);
-  printf("  build status:\n");
-  printf("%s\n", log);
+  if (err) {
+    clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 8192, log,
+                          NULL);
+    printf("  build status:\n");
+    printf("%s\n", log);
+    return -1;
+  }
 
   cl_kernel kernel = clCreateKernel(program, "fiber", &err);
 
