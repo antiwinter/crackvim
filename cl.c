@@ -1,4 +1,5 @@
 #define __CL_ENABLE_EXCEPTIONS
+#define CL_SILENCE_DEPRECATION
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
 #else
@@ -19,18 +20,15 @@ static cl_mem cli_init_buffer(cl_context ctx, cl_command_queue cq, void *buf,
 
 #define COUNT 2048
 
-void run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base,
-                   uint8_t *pass, int count) {
+int run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
+                  uint8_t *out, int count) {
   int err, fd, len, n_found = 0, k_count = COUNT, cu_n;
-  char src[8192], name[64];
+  char src[8192], name[64], log[8192];
 
   fd = open("./fiber.c", O_RDONLY);
   len = read(fd, src, 8192);
   src[len] = 0;
   close(fd);
-
-  int out_len = count / 128 * 16 + 4;
-  uint8_t *out = malloc(out_len);
 
   // prepare device
   cl_device_id device_id;
@@ -47,6 +45,12 @@ void run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base,
   cl_program program =
       clCreateProgramWithSource(ctx, 1, (const char **)&src, NULL, &err);
   clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+
+  clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 8192, log,
+                        NULL);
+  printf("  build status:\n");
+  printf("%s\n", log);
+
   cl_kernel kernel = clCreateKernel(program, "fiber", &err);
 
   // prepare arguments
@@ -72,20 +76,10 @@ void run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base,
   size_t global = count / COUNT;
   clEnqueueNDRangeKernel(cq, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
 
-  printf("  %d threads (each %d job), local=%d\n", global, COUNT, local);
-  clEnqueueReadBuffer(cq, k_out, CL_TRUE, 0, out_len, out, 0, NULL, NULL);
+  printf("  %zu threads (each %d job), local=%zu\n", global, COUNT, local);
+  clEnqueueReadBuffer(cq, k_out, CL_TRUE, 0, OUT_LEN, out, 0, NULL, NULL);
   clEnqueueReadBuffer(cq, k_nfound, CL_TRUE, 0, 4, &n_found, 0, NULL, NULL);
   clFinish(cq);
-
-  if (n_found) {
-    // printf("%d found:\n", n_found / 16);
-    uint8_t txt[MSG_MAX], _pass[PASS_MAX], *p;
-    for (p = out; *p; p += PASS_MAX) {
-      strncpy((char *)_pass, (char *)p, PASS_MAX);
-      dec_u8(cipher, salt, _pass, txt);
-      printf("%s   %s\n", _pass, txt);  // possible solution
-    }
-  }
 
   // clear up
   clReleaseMemObject(k_salt);
@@ -99,5 +93,6 @@ void run_fibers_cl(uint32_t *salt, uint8_t *cipher, uint8_t *base,
   clReleaseKernel(kernel);
   clReleaseCommandQueue(cq);
   clReleaseContext(ctx);
-  return 0;
+
+  return n_found;
 }

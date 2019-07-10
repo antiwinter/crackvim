@@ -37,11 +37,10 @@ void *fiber(void *input) {
   return NULL;
 }
 
-void run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
-                int count, int threads) {
+int run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
+               uint8_t *out, int count, int threads) {
   int i, each = (count + threads - 1) / threads, n_found = 0;
   struct fiber_params fp[THREAD_MAX];
-  uint8_t *out = malloc(each * PASS_MAX + 4), *p;
 
   for (i = 0; i < threads; i++) {
     fp[i].salt = salt;
@@ -56,22 +55,8 @@ void run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
   }
 
   for (i = 0; i < threads; i++) pthread_join(fp[i].pid, NULL);
-
-  if (n_found) {
-    // printf("%d found:\n", n_found / 16);
-    uint8_t txt[MSG_MAX];
-    uint8_t _pass[PASS_MAX];
-    for (p = out; *p; p += PASS_MAX) {
-      strncpy((char *)_pass, (char *)p, PASS_MAX);
-      dec_u8(cipher, salt, _pass, txt);
-      printf("%s   %s\n", _pass, txt);  // possible solution
-    }
-  }
-
-  free(out);
+  return n_found;
 }
-
-void run_fibers_cl() {}
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -109,8 +94,21 @@ int main(int argc, char *argv[]) {
   uint8_t *u = (uint8_t *)" kmgt";
   uint8_t pass[PASS_MAX] = {0};
 
+  uint8_t *out = malloc(OUT_LEN);
   for (;; ai += GROUP) {
-    run_fibers(salt, cipher, base, pass, GROUP, tn);
+    int n_found = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
+    // int n_found = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
+
+    if (n_found) {
+      // printf("%d found:\n", n_found / 16);
+      uint8_t txt[MSG_MAX], _pass[PASS_MAX], *p;
+      for (p = out; *p; p += PASS_MAX) {
+        strncpy((char *)_pass, (char *)p, PASS_MAX);
+        dec_u8(cipher, salt, _pass, txt);
+        printf("%s   %s\n", _pass,
+               txt);  // possible solution
+      }
+    }
     update_pass(pass, GROUP, base);
 
     gettimeofday(&t1, NULL);
