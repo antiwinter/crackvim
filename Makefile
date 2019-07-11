@@ -1,30 +1,20 @@
+OS = $(shell uname -s)
+
 all: gc
 
+CFLAGS = -Wno-deprecated-declarations -pthread
 
-pkzip_crypto.o: pkzip_crypto.c pkzip_crypto.h
-	gcc -c -o $@ $<
-
-crackvim.o: crackvim.c crc32.h pkzip_crypto.h
-	gcc -c -o $@ $<
-
-crc32.o: crc32.c
-	gcc -c -o $@ $<
-
-crackvim: crackvim.o crc32.o pkzip_crypto.o
-	gcc -pthread -o $@ $^
-
-zip:
-	g++ -std=c++11 zipforce.cpp
+ifeq (${OS},Darwin)
+    CFLAGS += -framework OpenCL
+else ifeq (${OS},Linux)
+    CFLAGS += -lOpenCL
+endif
 
 gc:
-#	gcc -framework OpenCL -Wno-deprecated-declarations gcv.c cl.c
-	gcc -L/usr/lib/x86_64-linux-gnu -pthread -Wno-deprecated-declarations gcv.c cl.c -lOpenCL
-
-zfp:
-	g++ -std=c++11 -framework OpenCL -Wno-deprecated-declarations zfg.cpp 
+	gcc gcv.c cl.c ${CFLAGS}
 
 .PHONY: clean
 
 clean:
 	rm -f *.o
-	rm -f crackvim
+	rm -f gcv
