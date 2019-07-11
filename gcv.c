@@ -39,6 +39,7 @@ int run_fibers(uint32_t *salt, uint8_t *cipher, uint8_t *base, uint8_t *pass,
                uint8_t *out, int count, int threads) {
   int i, each = (count + threads - 1) / threads;
   struct fiber_params fp[THREAD_MAX];
+  *(uint32_t *)out = 4;
 
   for (i = 0; i < threads; i++) {
     fp[i].salt = salt;
@@ -96,9 +97,18 @@ int main(int argc, char *argv[]) {
 
   uint8_t *out = malloc(OUT_LEN);
   uint8_t *out1 = malloc(OUT_LEN);
-  for (;; ai += GROUP) {
-    *(uint32_t *)out = *(uint32_t *)out1 = 4;
 
+  // init device
+  if (tn) {
+    printf("Using CPU: %d threads\n", tn);
+  }
+
+  if (!tn || env) {
+    err = cl_init(salt, cipher, base, GROUP);
+    if (err) return err;
+  }
+
+  for (;; ai += GROUP) {
     if (env || tn) {
       err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
       if (err) return err;
@@ -107,7 +117,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (env || !tn) {
-      err = run_fibers_cl(salt, cipher, base, pass, out1, GROUP);
+      err = run_fibers_cl(pass, out1);
       if (err) return err;
       p = out1;
       q = 0;
