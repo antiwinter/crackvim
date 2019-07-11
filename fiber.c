@@ -133,7 +133,7 @@ __kernel void _fiber(
   // putn(&count, 4);
 
   update_pass(pass, id * count, base);
-  *(out + 4) = 0;
+  // *(out + 4) = 0;
 
   for (; n--; update_pass(pass, 1, base)) {
     if (dec_u8(cipher, salt, pass, 0)) {

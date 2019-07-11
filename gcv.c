@@ -62,8 +62,11 @@ int main(int argc, char *argv[]) {
   }
 
   // get threads info
-  char *th = getenv("TH");
-  int i, tn = th ? atoi(th) : 1;
+  char *env = getenv("TH");
+  int i, err, tn = env ? atoi(env) : 0;
+
+  env = getenv("TEST");
+  if (env) tn = 1;
 
   // init cipher
   uint8_t cipher[MSG_MAX];
@@ -78,7 +81,7 @@ int main(int argc, char *argv[]) {
   init_salt(salt);
 
   // init set
-  uint8_t base[512], *rs = base + 64, *p = base + 4;
+  uint8_t base[512], *rs = base + 64, *p = base + 4, *q;
   int *bl = (int *)base;
   sprintf((char *)base + 4, BASE);
   for (*bl = 0; *p; p++, (*bl)++) rs[*p] = *bl;
@@ -92,23 +95,48 @@ int main(int argc, char *argv[]) {
   uint8_t pass[PASS_MAX] = {0};
 
   uint8_t *out = malloc(OUT_LEN);
+  uint8_t *out1 = malloc(OUT_LEN);
   for (;; ai += GROUP) {
-    *(uint32_t *)out = 4;
-    // int err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
-    int err = run_fibers_cl(salt, cipher, base, pass, out, GROUP);
+    *(uint32_t *)out = *(uint32_t *)out1 = 4;
+
+    if (env || tn) {
+      err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
+      if (err) return err;
+      p = out;
+      q = 0;
+    }
+
+    if (env || !tn) {
+      err = run_fibers_cl(salt, cipher, base, pass, out1, GROUP);
+      if (err) return err;
+      p = out1;
+      q = 0;
+    }
+
+    if (env) {
+      p = out;
+      q = out1;
+    }
+
     // exit(0);
-    if (err) return err;
-    if (*(uint32_t *)out) {
+    if (*(uint32_t *)p / 16) {
       // printf("%d found:\n", n_found / 16);
-      uint8_t txt[MSG_MAX], _pass[PASS_MAX], *p;
-      for (p = out + 4; *p; p += PASS_MAX) {
+      uint8_t txt[MSG_MAX], _pass[PASS_MAX];
+      i = 0;
+      for (p += 4, q += 4; *p; p += PASS_MAX, q += PASS_MAX) {
         strncpy((char *)_pass, (char *)p, PASS_MAX);
         dec_u8(cipher, salt, _pass, txt);
-        printf("%s   %s\n", _pass,
-               txt);  // possible solution
+        if (env) {
+          printf("%d/(%d-%d) : %s - %s : %s\n", ++i, *(uint32_t *)out / 16,
+                 *(uint32_t *)out1 / 16, p, q,
+                 strncmp((char *)p, (char *)q, PASS_MAX) ? "FAIL" : "pass");
+        } else
+          printf("%s   %s\n", _pass,
+                 txt);  // possible solution
       }
     }
     update_pass(pass, GROUP, base);
+    if (env) continue;
 
     gettimeofday(&t1, NULL);
 #define get_unit(_x) for (p = u; _x > 1000 && *(p + 1); _x /= 1000, p++)
