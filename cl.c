@@ -8,7 +8,7 @@
 
 #include "gcv.h"
 
-#define COUNT 2048
+#define COUNT 4096
 #define BUF_SIZE 8192
 
 #include <ctype.h>
@@ -154,6 +154,7 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
                                  sizeof(local), &local, NULL);
 
   if (local > global) local = global;
+
   printf("%d:  %zu threads (each %d job), local=%zu\n", err, global, k_count,
          local);
   return 0;
