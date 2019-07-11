@@ -69,12 +69,16 @@ int main(int argc, char *argv[]) {
   env = getenv("TEST");
   if (env) tn = 1;
 
+  // tn = 1;
+  // env = 0;
+
   // init cipher
   uint8_t cipher[MSG_MAX];
   int fd = open(argv[1], O_RDONLY);
   read(fd, cipher, 12);
-  int len = read(fd, cipher, MSG_MAX - 48);
-  cipher[len] = 0;
+  int len = read(fd, cipher + 4, MSG_MAX - 48);
+  (cipher + 4)[len] = 0;
+  *(uint32_t *)cipher = len;
   close(fd);
 
   // init salt
@@ -141,7 +145,7 @@ int main(int argc, char *argv[]) {
                  *(uint32_t *)out1 / 16, p, q,
                  strncmp((char *)p, (char *)q, PASS_MAX) ? "FAIL" : "pass");
         } else
-          printf("%s   %s\n", _pass,
+          printf("%s :%lu: %s\n", _pass, strnlen((char *)txt, MSG_MAX),
                  txt);  // possible solution
       }
     }

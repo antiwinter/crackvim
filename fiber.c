@@ -45,8 +45,9 @@ int dec_u8(uchar *cipher, uint *salt, uchar *pass, uchar *txt) {
   uint key[3] = {305419896, 591751049, 878082192};
   uchar *p = pass, x, c = 0, n, *q = txt;
   for (; *p;) update_key(salt, key, *p++);
+  uint len = *(uint *)cipher;
 
-  for (p = cipher; *p;) {
+  for (p = cipher + 4; len--;) {
     // dec cipher
     ushort t = key[2] | 2;
     x = *p++ ^ ((t * (t ^ 1)) >> 8);
@@ -72,6 +73,11 @@ int dec_u8(uchar *cipher, uint *salt, uchar *pass, uchar *txt) {
 
     // next
     update_key(salt, key, x);
+  }
+
+  while (c-- && txt) {
+    *q++ = 0x80;
+    *q = 0;
   }
 
   return 1;
@@ -136,6 +142,7 @@ __kernel void _fiber(
   // *(out + 4) = 0;
 
   for (; n--; update_pass(pass, 1, base)) {
+    // sprintf((char *)pass, "good6");
     if (dec_u8(cipher, salt, pass, 0)) {
       uchar *p;
       volatile __global uchar *q;
