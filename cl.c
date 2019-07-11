@@ -3,7 +3,7 @@
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
 #else
-#include <CL/cl.hpp>
+#include <CL/cl.h>
 #endif
 
 #include "gcv.h"
@@ -99,8 +99,19 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
   close(fd);
 
   // prepare device
+  cl_platform_id platforms[32];
+  cl_uint num_platforms;	
+  clGetPlatformIDs(32, platforms, &num_platforms);
+  printf("got %d platforms\n", num_platforms);
+
+  cl_device_id ids[32];
+  cl_uint num_devs;
+
   int cu_n, err;
-  clGetDeviceIDs(NULL, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+  clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 1, ids, &num_devs);
+  printf("got %d devs\n", num_devs);
+
+  device_id = ids[0];
   clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
   clGetDeviceInfo(device_id, CL_DEVICE_NAME, 64, name, NULL);
 
@@ -154,6 +165,7 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
                                  sizeof(local), &local, NULL);
 
   if (local > global) local = global;
+  if (local > 512) local = 512;
 
   printf("%d:  %zu threads (each %d job), local=%zu\n", err, global, k_count,
          local);

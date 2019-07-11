@@ -1,4 +1,4 @@
-all: crackvim zip zfp gc
+all: gc
 
 
 pkzip_crypto.o: pkzip_crypto.c pkzip_crypto.h
@@ -17,7 +17,8 @@ zip:
 	g++ -std=c++11 zipforce.cpp
 
 gc:
-	gcc -framework OpenCL -Wno-deprecated-declarations gcv.c cl.c
+#	gcc -framework OpenCL -Wno-deprecated-declarations gcv.c cl.c
+	gcc -L/usr/lib/x86_64-linux-gnu -pthread -Wno-deprecated-declarations gcv.c cl.c -lOpenCL
 
 zfp:
 	g++ -std=c++11 -framework OpenCL -Wno-deprecated-declarations zfg.cpp 

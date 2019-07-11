@@ -10,8 +10,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#define BASE "abcdefghijklmnopqrstuvwxyz_1234567890."
-#define GROUP (1 << 22)
+#define BASE "abcdefghijklmnopqrstuvwxyzCLETRWDS_1234567890."
+#define GROUP (1 << 23)
 #define OUT_LEN (GROUP >> 7)
 #define PASS_MAX 16
 #define THREAD_MAX 100

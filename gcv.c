@@ -112,7 +112,9 @@ int main(int argc, char *argv[]) {
     if (err) return err;
   }
 
+  int n_found = 0;
   for (;; ai += GROUP) {
+	  fflush(stdout);
     if (env || tn) {
       err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
       if (err) return err;
@@ -134,6 +136,7 @@ int main(int argc, char *argv[]) {
 
     // exit(0);
     if (*(uint32_t *)p / 16) {
+	    n_found += *(uint32_t *)p / 16;
       // printf("%d found:\n", n_found / 16);
       uint8_t txt[MSG_MAX], _pass[PASS_MAX];
       i = 0;
@@ -158,7 +161,7 @@ int main(int argc, char *argv[]) {
     sp = hi / ((t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec) *
          1000000;
     get_unit(hi);
-    fprintf(stderr, "\r%.1f%c tested, ", hi, *p);
+    fprintf(stderr, "\r%.1f%c tested (%d), ", hi, *p, n_found);
     get_unit(sp);
     fprintf(stderr, "%.1f%c words/s :: %s   ", sp, *p, pass);
 #undef get_unit
