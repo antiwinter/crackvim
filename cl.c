@@ -105,20 +105,24 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
 
   cl_device_id ids[32];
   cl_uint num_devs;
-  int cu_n, f_m, err, i, j, mp = 0, wi_n;
+  int cu_n, f_m, err, i, j, mp = 0;
+  size_t wi_n;
 
   for (i = 0; i < num_platforms; i++) {
-    clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1, ids, &num_devs);
-    // printf("got %d devs\n", num_devs);
+    err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1, ids, &num_devs);
+    // printf("got %d devs, %d\n", num_devs, err);
+    if (err) continue;
 
     for (j = 0; j < num_devs; j++) {
-      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
-      clGetDeviceInfo(ids[j], CL_DEVICE_NAME, 64, name, NULL);
-      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_CLOCK_FREQUENCY, 4, &f_m, NULL);
-      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, 4, &wi_n, NULL);
+      err |= clGetDeviceInfo(ids[j], CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
+      err |= clGetDeviceInfo(ids[j], CL_DEVICE_NAME, 64, name, NULL);
+      err |= clGetDeviceInfo(ids[j], CL_DEVICE_MAX_CLOCK_FREQUENCY, 4, &f_m, NULL);
+      err |= clGetDeviceInfo(ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &wi_n, NULL);
+      if (err) continue;
 
-      printf("%d# %s: %d cus (with %d work-items) @%dMHz\n", (int)ids[j], name,
+      printf("%d# %s: %d cus (with %zu work-items) @%dMHz\n", *(int *)ids[j], name,
              cu_n, wi_n, f_m);
+
 
       int _mp = f_m * cu_n * wi_n;
       if (_mp > mp) {
@@ -128,7 +132,7 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
     }
   }
 
-  printf("%d# choose\n", (int)device_id);
+  printf("%d# choose\n", *(int *)device_id);
 
   // prepare kernel
   ctx = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
@@ -178,7 +182,6 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
                                  sizeof(local), &local, NULL);
 
   if (local > global) local = global;
-  if (local > 512) local = 512;
 
   printf("%d:  %zu threads (each %d job), local=%zu\n", err, global, k_count,
          local);
