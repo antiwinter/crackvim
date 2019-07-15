@@ -102,6 +102,13 @@ int main(int argc, char *argv[]) {
   uint8_t *out = malloc(OUT_LEN);
   uint8_t *out1 = malloc(OUT_LEN);
 
+  FILE *fp = fopen("./.pass", "r");
+  if (fp) {
+    fscanf(fp, "%s", pass);
+    fclose(fp);
+    printf("continue searching from %s\n", pass);
+  }
+
   // init device
   if (tn) {
     printf("Using CPU: %d threads\n", tn);
@@ -114,7 +121,7 @@ int main(int argc, char *argv[]) {
 
   int n_found = 0;
   for (;; ai += GROUP) {
-	  fflush(stdout);
+    fflush(stdout);
     if (env || tn) {
       err = run_fibers(salt, cipher, base, pass, out, GROUP, tn);
       if (err) return err;
@@ -136,7 +143,7 @@ int main(int argc, char *argv[]) {
 
     // exit(0);
     if (*(uint32_t *)p / 16) {
-	    n_found += *(uint32_t *)p / 16;
+      n_found += *(uint32_t *)p / 16;
       // printf("%d found:\n", n_found / 16);
       uint8_t txt[MSG_MAX], _pass[PASS_MAX];
       i = 0;
@@ -152,6 +159,11 @@ int main(int argc, char *argv[]) {
                  txt);  // possible solution
       }
     }
+
+    fp = fopen("./.pass", "w");
+    fprintf(fp, "%s\n", pass);
+    fclose(fp);
+
     update_pass(pass, GROUP, base);
     if (env) continue;
 

@@ -8,7 +8,6 @@
 
 #include "gcv.h"
 
-#define COUNT 4096
 #define BUF_SIZE 8192
 
 #include <ctype.h>
@@ -99,24 +98,37 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
   close(fd);
 
   // prepare device
-  cl_platform_id platforms[32];
-  cl_uint num_platforms;	
-  clGetPlatformIDs(32, platforms, &num_platforms);
-  printf("got %d platforms\n", num_platforms);
+  cl_platform_id platforms[8];
+  cl_uint num_platforms;
+  clGetPlatformIDs(8, platforms, &num_platforms);
+  // printf("got %d platforms\n", num_platforms);
 
   cl_device_id ids[32];
   cl_uint num_devs;
+  int cu_n, f_m, err, i, j, mp = 0, wi_n;
 
-  int cu_n, err;
-  clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 1, ids, &num_devs);
-  printf("got %d devs\n", num_devs);
+  for (i = 0; i < num_platforms; i++) {
+    clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1, ids, &num_devs);
+    // printf("got %d devs\n", num_devs);
 
-  device_id = ids[0];
-  clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
-  clGetDeviceInfo(device_id, CL_DEVICE_NAME, 64, name, NULL);
+    for (j = 0; j < num_devs; j++) {
+      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_COMPUTE_UNITS, 4, &cu_n, NULL);
+      clGetDeviceInfo(ids[j], CL_DEVICE_NAME, 64, name, NULL);
+      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_CLOCK_FREQUENCY, 4, &f_m, NULL);
+      clGetDeviceInfo(ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, 4, &wi_n, NULL);
 
-  printf("using %s\n", name);
-  printf("  %d CUs\n", cu_n);
+      printf("%d# %s: %d cus (with %d work-items) @%dMHz\n", (int)ids[j], name,
+             cu_n, wi_n, f_m);
+
+      int _mp = f_m * cu_n * wi_n;
+      if (_mp > mp) {
+        mp = _mp;
+        device_id = ids[j];
+      }
+    }
+  }
+
+  printf("%d# choose\n", (int)device_id);
 
   // prepare kernel
   ctx = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
@@ -150,7 +162,9 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
   k_out = cli_init_buffer(NULL, OUT_LEN);
   k_log = cli_init_buffer(NULL, BUF_SIZE);
 
-  int k_count = COUNT;
+  int k_count = 8192;
+  global = count / k_count;
+
   clSetKernelArg(kernel, 0, sizeof(cl_mem), &k_salt);
   clSetKernelArg(kernel, 1, sizeof(cl_mem), &k_cipher);
   clSetKernelArg(kernel, 2, sizeof(cl_mem), &k_base);
@@ -159,7 +173,6 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
   clSetKernelArg(kernel, 5, sizeof(cl_mem), &k_log);
   clSetKernelArg(kernel, 6, sizeof(int), &k_count);
 
-  global = count / COUNT;
   err = CL_INVALID_DEVICE;
   err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
                                  sizeof(local), &local, NULL);
