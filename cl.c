@@ -120,7 +120,7 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
       err |= clGetDeviceInfo(ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &wi_n, NULL);
       if (err) continue;
 
-      printf("%d# %s: %d cus (with %zu work-items) @%dMHz\n", *(int *)ids[j], name,
+      printf("%p# %s: %d cus (with %zu work-items) @%dMHz\n", ids[j], name,
              cu_n, wi_n, f_m);
 
 
@@ -132,7 +132,7 @@ int cl_init(uint32_t *salt, uint8_t *cipher, uint8_t *base, int count) {
     }
   }
 
-  printf("%d# choose\n", *(int *)device_id);
+  printf("%p# choose\n", device_id);
 
   // prepare kernel
   ctx = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
