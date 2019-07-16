@@ -69,8 +69,10 @@ int main(int argc, char *argv[]) {
   env = getenv("TEST");
   if (env) tn = 1;
 
-  // tn = 1;
-  // env = 0;
+#if defined(NOCL)
+  tn = tn ? tn : 1;
+  env = 0;
+#endif
 
   // init cipher
   uint8_t cipher[MSG_MAX];
@@ -115,7 +117,11 @@ int main(int argc, char *argv[]) {
   }
 
   if (!tn || env) {
+#if defined(NOCL)
+    err = -99;
+#else
     err = cl_init(salt, cipher, base, GROUP);
+#endif
     if (err) return err;
   }
 
@@ -130,7 +136,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (env || !tn) {
+#if defined(NOCL)
+      err = -99;
+#else
       err = run_fibers_cl(pass, out1);
+#endif
       if (err) return err;
       p = out1;
       q = 0;
