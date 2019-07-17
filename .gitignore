@@ -5,4 +5,5 @@ crackvim
 a.out
 worklog.md
 *.dSYM
+.pass
 

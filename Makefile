@@ -1,4 +1,5 @@
 OS = $(shell uname -s)
+#OS = Android
 
 all: gc
 
@@ -13,6 +14,8 @@ ifeq (${OS},Darwin)
     CFLAGS += -framework OpenCL
 else ifeq (${OS},Linux)
     CFLAGS += -lOpenCL
+else ifeq (${OS},Android)
+	CFLAGS += -L/system/vendor/lib64 -lOpenCL -I./opencl-headers
 endif
 else
     CFLAGS += -DNOCL
